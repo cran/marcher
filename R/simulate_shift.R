@@ -4,8 +4,10 @@
 #' 
 #' @param T time
 #' @param tau variance parameters - named vector with 'tau.z' and 'tau.v'
-#' @param A 95\% area parameter
-#' @param mu mean vector - typically output of \code{\link{getMu}}. Can also be any complex or a two-column matrix, or a multi-column matrix with some named columns "x" and "y" (case-insensitive)).
+#' @param A 95% area parameter
+#' @param mu mean vector - typically output of \code{\link{getMu}}. Can also be 
+#' any complex or a two-column matrix, or a multi-column matrix with some named 
+#' columns `x` and `y` (case-insensitive).
 #' @return a data frame with Time, X, and Y columns.
 #' @example ./demo/simulate_shift_example.r
 #' @seealso \code{\link{getMu}}
@@ -26,8 +28,7 @@ simulate_shift <- function (T, tau = NULL, mu, A) {
         colnames(mu) <- c("x","y")
         warning("I'm renaming your 'mu' columns 'x' and 'y'.")} else 
     stop("Apologies for stickling, but if you're not going to give me a two column or complex 'mu', you need to at least name your relevant columns 'x' and 'y'.")
-  
-  
+
   z.p <- sqrt(-2 * log(0.05))
   s <- A/(pi * z.p^2)
   

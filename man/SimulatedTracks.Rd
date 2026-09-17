@@ -9,9 +9,11 @@
 \alias{MOUF.sim.random}
 \alias{MWN.sim}
 \title{Simulated range shift tracks}
-\format{Each of these is a data frame with 100 observations of 
-three numeric variables (except for MOU.3range, which has 200 observations).  
-The columns are: \code{T}, \code{X}, \code{Y}.}
+\format{
+Each of these is a data frame with 100 observations of
+three numeric variables (except for MOU.3range, which has 200 observations).
+The columns are: \code{T}, \code{X}, \code{Y}.
+}
 \source{
 Code to simulate tracks like these are provided in the marcher vignette.
 }
@@ -24,12 +26,12 @@ Five simulated tracks: \code{MWN.sim},  \code{MOU.sim}, \code{MOUF.sim} are simu
 \details{
 The data frames are also \code{track} class object frame.
 \describe{
-  \item{MOU.3range}{Simulated migratory Ornstein-Uhlenbeck with 3 range}
-  \item{MOU.sim}{Simulated migratory Ornstein-Uhlenbeck}
-  \item{MOUF.sim}{Simulated migratory Ornstein-Uhlenbeck Flemming}
-  \item{MOUF.sim.random}{Simulated migratory Ornstein-Uhlenbeck Flemming at random or arbitrary times of observation}
-  \item{MWN.sim}{Simulated migratory white noise ranging model}
-  }
+\item{MOU.3range}{Simulated migratory Ornstein-Uhlenbeck with 3 range}
+\item{MOU.sim}{Simulated migratory Ornstein-Uhlenbeck}
+\item{MOUF.sim}{Simulated migratory Ornstein-Uhlenbeck Flemming}
+\item{MOUF.sim.random}{Simulated migratory Ornstein-Uhlenbeck Flemming at random or arbitrary times of observation}
+\item{MWN.sim}{Simulated migratory white noise ranging model}
+}
 }
 \examples{
 data(SimulatedTracks)

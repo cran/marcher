@@ -3,7 +3,8 @@
 #' Plotting functions for illustrating the results of a range-shift fit. 
 #' 
 #' @param x a fitted range shift object, i.e. output of the \code{\link{estimate_shift}}
-#' @param ns a vector of 3 simulation values, useful for smoothing the bars in the dumbbell plot.  For smoothing, it might be recommended to increase the first value, \code{n.sims} - the number of draws from the fitted migation process.
+#' @param bars whether or not to draw "bars" - i.e. estimates of the range shift corridor (these are often poorly rendered and are a work in process)
+#' @param bar.params a vector of 3 simulation values, useful for smoothing the bars in the dumbbell plot.  For smoothing, it might be recommended to increase the first value, \code{n.sims} - the number of draws from the fitted migation process.
 #' @param plot.ts whether or not to plot the time series as well
 #' @param stretch an extra parameter to extend the bars on the dumbbells (in real distance units).
 #' @param CI.cols three shading colors, from lightest to darkest. The default is a sequence of blues.
@@ -15,30 +16,49 @@
 #'
 #' @example ./demo/estimate_shift_example.r
 #' @export	
-plot.shiftfit <- function(x, ns = c(n.sims = 1e3, n.times = 1e2, n.bins = 10), 
+plot.shiftfit <- function(x, 
+                          bars = FALSE, 
+                          bar.params = c(n.sims = 1e3, n.times = 1e2, n.bins = 10), 
                           plot.ts = TRUE, stretch = 0, pt.cex = 0.8, 
                           pt.col = "antiquewhite", CI.cols = NULL, 
                           layout = NULL, par = NULL, ...){	
+  par.init <- par(no.readonly = TRUE)
+  on.exit(par(par.init))
+  
   #x is FIT
 	X <- x$X
 	Y <- x$Y
 	Z <- X + 1i*Y
 	T <- x$T
-	
 	p.CI <- x$p.CI  
 	
-	
-	# SOMETIMES - there are infinities in the time estimates (usually with no real range shift). We need to tidy those with the following ugly code. 
+	# SOMETIMES - there are infinities in the time estimates (usually with no real range shift). 
+	# We need to tidy those with the following ugly code. 
 	
 	ts <- which(grepl("t", row.names(p.CI)) & !(grepl("tau", row.names(p.CI))))
-	if( max(abs(p.CI[ts,2:3])) == Inf) cat("Some confidence intervals around the timing parameters are infinitely wide.  I'll plot something fat but not quite THAT wide.  The range shift model might not be appropriate.\n")
+	if(max(abs(p.CI[ts,2:3]), na.rm = TRUE) == Inf){
+	  par.inf <- rownames(p.CI)[which(p.CI$CI.high == Inf)]
+	  warning(paste0("At least one confidence interval  (", 
+	                 paste(par.inf, collapse = ", "), 
+	                 ") is infinitely wide.  I'll plot something fat but not quite THAT wide.  
+You may consider trying to refit the model (or that the range-shift model is not appropriate).\n"))
+	  p.CI[ts,]$CI.high <- pmin(p.CI[ts,]$CI.high, p.CI[ts,]$p.hat*10)
+	  p.CI[ts,]$CI.low <- pmax(p.CI[ts,]$CI.low, min(x$T))
+	}
 	
-	p.CI[ts,]$CI.high <- pmin(p.CI[ts,]$CI.high, p.CI[ts,]$p.hat*10)
-	ts <-  which(row.names(p.CI) %in% c("t1","t2"))
-	p.CI[ts,]$CI.low <- pmax(p.CI[ts,]$CI.low, min(x$T))
+	# SOMETIMES - there are also NA's in the time confidence intervals (mainly for dt). 
+	# Not much to do here except not plot them
+
+	if(any(is.na(p.CI[ts,]))){
+	  par.na <- names(which(rowSums(is.na(p.CI[ts,])) > 0))
+	  warning(paste0("At least one confidence interval (", 
+	                 paste(par.na, collapse = ", "), 
+	                 ") could not be computed and will not be illustrated.\n"))
+	  p.CI[par.na,]$CI.high <- p.CI[par.na,]$p.hat
+	  p.CI[par.na,]$CI.low <- p.CI[par.na,]$p.hat
+	}
 
 	# carrying on ...
-	
 	p.hat <- t(p.CI)[1,] %>% t %>% data.frame
 
 	z.95 <- sqrt(-2*log(1-0.95))
@@ -65,20 +85,24 @@ plot.shiftfit <- function(x, ns = c(n.sims = 1e3, n.times = 1e2, n.bins = 10),
 
 	plot(X,Y, asp=1, type = "n", ...)
 	if(n.clust == 2){
-		Z.bars <- getBars(p.mu.hat, p.mu.se, n.sims = ns[1], n.time = ns[2], n.bins = ns[3], stretch = stretch)
-
-		# draw big bar
-		polygon.Z(Z.bars[,1], Z.bars[,4], col=g1)
+		if(bars){ 
+		  Z.bars <- getBars(p.mu.hat, p.mu.se, n.sims = bar.params[1], n.time = bar.params[2], 
+		                    n.bins = bar.params[3], stretch = stretch)
+  		# draw big bar
+		  polygon.Z(Z.bars[,1], Z.bars[,4], col=g1)
+		}
 
 		# draw bells
 		with(p.mu.hat, {
 				polygon.circle(x1, y1, r95, col=g1, border=NA)
 				polygon.circle(x2, y2, r95, col=g1, border=NA)
 				polygon.circle(x1, y1, r50, col=g2, border=NA)
-				polygon.circle(x2, y2, r50, col=g2, border=NA)})
+				polygon.circle(x2, y2, r50, col=g2, border=NA)
+				lines(c(x1, x2), c(y1, y2), lwd = 2, col = g3, type = "o", pch =19, cex = 2)
+				})
 			
 		# draw small bar
-		polygon.Z(Z.bars[,2], Z.bars[,3], col=g2)
+		if(bars) polygon.Z(Z.bars[,2], Z.bars[,3], col=g2) 
 	}
 	
 	if(n.clust == 3){
@@ -88,12 +112,13 @@ plot.shiftfit <- function(x, ns = c(n.sims = 1e3, n.times = 1e2, n.bins = 10),
 		p.mu.hat2 <- with(p.mu.hat, data.frame(x1=x3, x2, y1=y3, y2, t1 = t2, dt = dt2))
 		p.mu.se2  <- with(p.mu.se,  data.frame(x1=x3, x2, y1=y3, y2, t1 = t2, dt = dt2))
 		
-		Z.bars1 <- getBars(p.mu.hat1, p.mu.se1, n.sims = ns[1], n.time = ns[2], n.bins = ns[3])
-		Z.bars2 <- getBars(p.mu.hat2, p.mu.se2, n.sims = ns[1], n.time = ns[2], n.bins = ns[3])
-
-		# plot wide bars
-		polygon.Z(Z.bars1[,1], Z.bars1[,4], col=g1)
-		polygon.Z(Z.bars2[,1], Z.bars2[,4], col=g1)
+		if(bars){
+  		Z.bars1 <- getBars(p.mu.hat1, p.mu.se1, n.sims = bar.params[1], n.time = bar.params[2], n.bins = bar.params[3])
+  		Z.bars2 <- getBars(p.mu.hat2, p.mu.se2, n.sims = bar.params[1], n.time = bar.params[2], n.bins = bar.params[3])
+    	# plot wide bars
+  		polygon.Z(Z.bars1[,1], Z.bars1[,4], col=g1)
+  		polygon.Z(Z.bars2[,1], Z.bars2[,4], col=g1)
+		}
 		
 		# plot big circles
 		with(p.mu.hat, {
@@ -103,18 +128,17 @@ plot.shiftfit <- function(x, ns = c(n.sims = 1e3, n.times = 1e2, n.bins = 10),
 				)
 		
 		# plot narrow bars
-		polygon.Z(Z.bars1[,2], Z.bars1[,3], col=g2)
-		polygon.Z(Z.bars2[,2], Z.bars2[,3], col=g2)
+		if(bars){
+  		polygon.Z(Z.bars1[,2], Z.bars1[,3], col=g2)
+  		polygon.Z(Z.bars2[,2], Z.bars2[,3], col=g2)
+		} 
 		
 		# plot small circles
 		with(p.mu.hat, {
 				polygon.circle(x1, y1, r50, col=g2, border=NA)
 				polygon.circle(x2, y2, r50, col=g2, border=NA)
 				polygon.circle(x3, y3, r50, col=g2, border=NA)
-				
-				points(x1, y1, pch=19, cex=2, col=g3)
-				points(x2, y2, pch=19, cex=2, col=g3)
-				points(x3, y3, pch=19, cex=2, col=g3)
+				lines(c(x1, x2, x3), c(y1, y2, y3), lwd = 2, col = g3, type = "o", pch =19, cex = 2)
 				})
 	}
 	# draw points
@@ -128,7 +152,8 @@ plot.shiftfit <- function(x, ns = c(n.sims = 1e3, n.times = 1e2, n.bins = 10),
 }
 
 
-plotFit.ts <- function(FIT, pt.col = "antiquewhite", CI.cols = NULL, n.sims = 1e3, xlab = "Time", pt.cex = 1, ...){
+plotFit.ts <- function(FIT, pt.col = "antiquewhite", CI.cols = NULL, 
+                       n.sims = 1e3, xlab = "Time", pt.cex = 1, ...){
 
   gr1 <- grey(.2)
  

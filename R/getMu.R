@@ -3,7 +3,9 @@
 #'  Obtain a mean vector for a movement with one (\code{getMu}) or more (\code{getMu_multi}) range shifts.  This function is mainly used within the likelihood of range shift processes, but is also useful for simulating processes.  
 #'  
 #' @param T vector of times
-#' @param p.m mean parameters. A named vector with elements t1, dt, x1, y1, x2, y2, for a single-shift process.  For multiple (n) shifts, the paramaters are numbered: (x1, x2 ... xn), (y1, y2 ... yn), (t1 .. t[n-1]), (dt1 ... dt[n-1]) 
+#' @param p.m mean parameters. A named vector with elements t1, dt, x1, y1, x2, y2, 
+#' for a single-shift process.  For multiple (n) shifts, the paramaters are numbered: 
+#' (x1, x2 ... xn), (y1, y2 ... yn), (t1 .. t(n-1)), (dt1 ... dt(n-1))
 #' @aliases getMu_multi
 #' @seealso \code{\link{simulate_shift}}
 #' @example ./demo/getMu_example.r
@@ -28,6 +30,13 @@ getMu_multi <- function(T, p.m){
   dt <- p.m[grep("dt", names(p.m))] %>% as.vector
   
   n.shifts <- length(xs) - 1
+  if(length(dt) < n.shifts){
+   dt.names <- paste0("dt",1:n.shifts) 
+   dts <- c(p.m[grep("dt", names(p.m))], rep(0, n.shifts - length(dt)))
+   names(dts)[dts == 0] <- dt.names[!dt.names %in% names(dts)]
+   dt <- dts[order(names(dts))] %>% as.vector
+  }
+  
   t.starts <- p.m[paste0("t",1:n.shifts)] %>% as.vector
   t.ends <- t.starts + dt
   

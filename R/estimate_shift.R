@@ -2,19 +2,30 @@
 #' 
 #' Estimation and helper functions for nls fit of migration model
 #' 
-#' @details This algorithm minimizes the square of the distance of the locations from a double-headed hockeystick curve, then estimates the times scale using the ARMA/AR models.  Confidence intervals are obtained by bootstrapping the data and reestimating. See example and vignette for implementation. 
+#' @details This algorithm minimizes the square of the distance of the locations 
+#' from a double-headed hockeystick curve, then estimates the times scale using the ARMA/AR models.  
+#' Confidence intervals are obtained by bootstrapping the data and reestimating. 
+#' See example and vignette for implementation. 
 #'
 #' @param T time
-#' @param n.clust the number of ranges to estimate.  Two is relatively easy and robust, and three works fairly will (with good initial guesses).  More can be prohibitively slow. 
-#' @param p.m0 initial parameter guesses - a named vector with (e.g.) elements x1, x2, y1, y2, t1, dt.  It helps if this is close - the output of \code{\link{quickfit}} can be helpful, as can plotting the curve and using \code{\link{locator}}. If left as NULL, the function will make some guesses for you - starting with \code{quickfit}. 
+#' @param n.clust the number of ranges to estimate.  Two is relatively easy and robust, 
+#' and three works fairly will (with good initial guesses).  More can be prohibitively slow. 
+#' @param p.m0 initial parameter guesses - a named vector with (e.g.) elements x1, x2, y1, y2, t1, dt.  
+#' It helps if this is close - the output of [quickfit()] can be helpful, as can plotting 
+#' the curve and using [locator()]. If left as NULL, the function will make some guesses 
+#' for you - starting with `quickfit`. 
 #' @param dt0 initial guess for duration of migration
-#' @param method one of `ar` or `like` (case insenstive), whether or not to use the AR equivalence method (faster, needs regular data - with some tolerance for gaps) or Likelihood method, which is slower but robust for irregular data.
+#' @param method one of `ar` or `like` (case insenstive), whether or not to use the AR equivalence 
+#' method (faster, needs regular data - with some tolerance for gaps) or Likelihood method, which is 
+#' slower but robust for irregular data.
 #' @param CI whether or not to estimate confidence intervals
 #' @param nboot number of bootstraps 
 #' @param X x coordinate
 #' @param Y y coordinate
-#' @param area.direct passed as direct argument to getArea
-#' @param model one of "MWN", "MOU" or "MOUF" (case insensitive).  By default, the algorithm selects the best one according to AIC using the \code{\link{selectModel}} function.
+#' @param model one of "MWN", "MOU" or "MOUF" (case insensitive).  By default, the algorithm selects 
+#' the best one according to AIC using the [selectModel()] function.
+#' @param area.direct passed as direct argument to [getArea()]
+#' @param time.units units of time (e.g. "hours", "days") used for reporting rates and durations.
 #'
 #' @return a list with the following elements
 #' \item{T,X,Y}{Longitude coordinate with NA at prediction times} 
@@ -23,13 +34,14 @@
 #' \item{model}{One of "wn", "ou" or "ouf" - the selected model for the residuals.}
 #' \item{hessian}{The hessian of the mean parameters.}
 #' 
-#' @aliases estimate.mouf.nls getP.nls geMu.nls
 #' @example ./demo/estimate_shift_example.r
 #' @export
+#' @importFrom methods is
 estimate_shift <- function(T, X, Y, n.clust = 2,  
                            p.m0 = NULL, dt0=min(5, diff(range(T))/20),  
                            method = c("ar","like")[1], CI=TRUE, 
                            nboot = 100, model = NULL, 
+                           time.units = "day",
                            area.direct = NULL)
 {
   method <- tolower(method)
@@ -38,13 +50,20 @@ estimate_shift <- function(T, X, Y, n.clust = 2,
   hessian <- NULL
   use.quickfit <- FALSE
   
+  if("POSIXt" %in% is(T) | "Date" %in% is(T)){
+    T.POSIX <- T
+    T <- difftime(T, T[1], units = time.units) %>% as.numeric
+    is.POSIX <- TRUE
+  } else is.POSIX <- FALSE
+  
   if(is.null(p.m0)){ 
     p.m0 <- try(quickfit(T,X,Y, dt=dt0, n.clust = n.clust, plotme=FALSE))
     use.quickfit <- TRUE
   }
   
   if(inherits(p.m0, "try-error")){
-    warning("Having a hard time guessing initial centroids using k-means clustering. Going to take a wild guess, but you should consider providing guesses.\n")
+    warning("Having a hard time guessing initial centroids using k-means clustering. \n
+            I'm going to take a wild guess, but you should consider providing guesses.\n")
     if(n.clust == 2)
       p.m0 <- c(t1 = round((T[n]-T[1])*0.5+T[1]), dt = mean(diff(T))*2, x1 = X[1], y1 = Y[1], x2 = X[n], y2 = Y[n]) 
     if(n.clust == 3)
@@ -54,7 +73,8 @@ estimate_shift <- function(T, X, Y, n.clust = 2,
                 dt2 = mean(diff(T))*2, 
                 x1 = X[1], y1 = Y[1], 
                 x2 = X[n], y2 = Y[n])
-    if(n.clust > 3) stop("Scratch that. You're going to have to provide some decent guesses if you really want to fit more than 3 ranges at once.")
+    if(n.clust > 3) stop("Scratch that. You're going to have to provide some decent guesses\n 
+                         if you really want to fit more than 3 ranges at once.")
   }
   
   ##################################################
@@ -68,9 +88,16 @@ estimate_shift <- function(T, X, Y, n.clust = 2,
   p.mu.hat <- p.mu.fit$par
   
   dts <- grep("dt", names(p.mu.hat))
-  if(any(p.mu.hat[dts] < 0)){
-    p.mu.fit <- getP.mu(T, X, Y, p.m0, FUN = FUN, hessian = TRUE, bounds=TRUE)
-    p.mu.hat <- p.mu.fit$par
+  
+  if(length(dts) < n.clust - 1){
+    alldts <- paste0("dt", 1:(n.clust - 1))
+    dt.hats <- p.mu.hat[grep("dt",names(p.mu.hat))]
+    dt.present <- names(dt.hats)
+    dt.absent <- alldts[!(alldts %in% dt.present)]
+    dt.hats <- c(dt.hats, rep(0, n.clust - 1 - length(dt.hats)))
+    names(dt.hats) <- c(dt.present, dt.absent)
+    dt.hats <- dt.hats[order(names(dt.hats))]
+    p.mu.hat <- c(p.mu.hat[!grepl("dt", names(p.mu.hat))], dt.hats)
   }
   
   XY.hat <- FUN(T, p.mu.hat)
@@ -107,7 +134,23 @@ estimate_shift <- function(T, X, Y, n.clust = 2,
   p.hat <- c(tau.hat, p.mu.hat)
   A <- getArea(p.hat,T,X,Y, model=model, direct = area.direct)
   
+  if(is.POSIX){
+    t.hat <- p.hat[paste0("t", 1:(n.clust-1))] 
+    t.hat.POSIX <- min(T.POSIX) + lubridate::duration(t.hat, units = time.units)
+    names(t.hat.POSIX) <- names(t.hat)
+
+    t.start <- t.hat.POSIX
+    dts <- p.hat[grepl("dt", names(p.hat))]
+    t.end <- t.start + lubridate::duration(dts, units = time.units)
+    
+    shifttimes.POSIX <- data.frame(start = lubridate::round_date(t.start, time.units),
+                 end = lubridate::round_date(t.end, time.units),
+                 duration = round(t.end - t.start))
+    
+  } else shifttimes.POSIX = NULL
+  
   mrsa.fit <- list(p.hat = c(A = A$A.hat, p.hat), 
+                   shifttimes.POSIX = shifttimes.POSIX, 
                     model = model, 
                     ll=c(ll=ll), aic = aic['aic'], df = aic['df'],
                     method = method,
@@ -115,8 +158,15 @@ estimate_shift <- function(T, X, Y, n.clust = 2,
                     rangemodel.given = rangemodel.given,
                     p.m0 = p.m0, 
                     use.quickfit = use.quickfit,
-                    X=X, Y=Y, T=T, Z.res=Z.res)	
-  
+                    X=X, Y=Y, T=T, 
+                    Z.res=Z.res,
+                    is.POSIX = is.POSIX)
+
+  if(is.POSIX){
+    mrsa.fit$T.POSIX = T.POSIX
+    mrsa.fit$time.units = time.units
+  }
+    
   if(CI) {
     # obtain mean parameters
     hessian <- p.mu.fit$hessian
@@ -125,8 +175,8 @@ estimate_shift <- function(T, X, Y, n.clust = 2,
     if(n.clust == 2) 
       p.mu.sd <- try(sqrt(1/diag(hessian))) else {	
 			#try(sqrt(diag(solve(hessian)))) else {	
-        which.xy <-	c(grep("x", names(p.mu.hat)), grep("y", names(p.mu.hat)))
-        which.t <-	grep("t", names(p.mu.hat))
+        which.xy <-	c(grep("x", colnames(hessian)), grep("y", colnames(hessian)))
+        which.t <-	grep("t", colnames(hessian))
         p.mu.sd <- try(sqrt( c(diag(solve(hessian[which.xy, which.xy])), 1/diag(hessian[which.t,which.t]))))
       }
     
@@ -136,13 +186,19 @@ estimate_shift <- function(T, X, Y, n.clust = 2,
       zeros <- which(diag(hessian) == 0)		
       p.mu.sd[-zeros] <- sqrt(diag(solve(hessian[-zeros,-zeros])))
     }
+    
     if(any(is.na(p.mu.sd))){
       warning(cat("Can't obtain some confidence intervals - most likely because the migration time is too fast.\n"))
       p.mu.sd[is.na(p.mu.sd)] <- 0
     }
     
+    # check to see if all dt's are available 
+    p.mu.sd.df <- gtools::smartbind(data.frame(t(p.mu.hat)),
+              data.frame(t(p.mu.sd)))[2,] 
+    p.mu.sd <- as.vector(t(p.mu.sd.df))
+    names(p.mu.sd) <- names(p.mu.sd.df) 
+    
     # obtain variance parameters
-		
 		tau.bs <- matrix(ncol = length(tau.hat), nrow = nboot)
 		
     if(model == "wn") tau.withCI <- NULL
@@ -179,7 +235,6 @@ estimate_shift <- function(T, X, Y, n.clust = 2,
     }
     
     p.mu.CI <-  cbind(p.mu.hat, p.mu.hat - 1.96*p.mu.sd, p.mu.hat + 1.96*p.mu.sd)
-    
     p.CI <- rbind(A = c(A$A.hat, A$A.hat + c(-1.96,1.96) * A$A.se), 
                   tau.withCI, 
                   p.mu.CI) %>% data.frame 
@@ -206,14 +261,17 @@ print.shiftfit <- function(x, ...){
         cat(paste0(n.clust, " ranges (", n.clust-1, " shifts) fitted using the ", toupper(method), " method.\n")) 
    if(use.quickfit){ 
      cat("Initial shift parameters obtained from `quickfit`:\n") 
-     print(signif(p.m0, 4),...)}
-       
+     print(signif(p.m0, 4), ...)}
    if(!rangemodel.given) 
      cat(paste0("The AIC-selected ranging model is ", toupper(model), ".\n\n")) else
        cat(paste0("The fitted ranging model is ", toupper(model), ".\n\n"))
     
     cat("Parameter Estimates:\n")
     if(!("p.CI" %in% names(x))) print(t(p.hat),...) else print(p.CI,...)
+    if(x$is.POSIX){
+      cat("\nEstimates of range-shift timing:\n")
+      print(x$shifttimes.POSIX)
+    }
     cat(paste0("\nlog-likelihood: ", signif(ll,4), "; AIC: ", signif(aic,4), "; degrees of freedom: ", signif(df,4), "\n"))
   })
   invisible(x)
@@ -225,7 +283,6 @@ AIC.shiftfit <- function(object,...) object$aic
 #' @export
 logLik.shiftfit <- function(object,...) object$ll
 
-
 computeAIC <- function(ll, model, n.clust){
   if(model %in% c("mouf","ouf")) k.s <- 3 else
     if(model %in% c("mou","ou")) k.s <- 2 else 
@@ -235,7 +292,7 @@ computeAIC <- function(ll, model, n.clust){
       return(c(aic = -2*ll + 2*(k.s + k.m), df = k.s + k.m))
 }
 
-getP.mu <- function(T,X,Y,p.m0, FUN = getMu, hessian = TRUE, bounds = TRUE){
+getP.mu <- function(T,X,Y,p.m0, FUN = getMu, hessian = TRUE, bounds = FALSE){
   getL.nls <- function(p.m, T, X, Y, FUN){
     Mu <- FUN(T, p.m)
     sum(c(X - Mu[,1], Y - Mu[,2])^2)
@@ -245,20 +302,14 @@ getP.mu <- function(T,X,Y,p.m0, FUN = getMu, hessian = TRUE, bounds = TRUE){
   ys <- grep("y", names(p.m0))
   dts <- grep("dt", names(p.m0))
   ts <- (1:length(p.m0))[-c(xs,ys,dts)]
-  
-  if(!bounds) fit <- try(optim(p.m0, getL.nls, T=T, X=X, Y=Y, hessian=hessian, FUN = FUN)) else {
-    upper <- p.m0*0
-    lower <- p.m0*0
-    
-    lower[xs] <- min(X)
-    lower[ys] <- min(Y)
-    lower[ts] <- min(T)
-    lower[dts] <- 0
-    upper[xs] <- max(X)
-    upper[ys] <- max(Y)
-    upper[ts] <- max(T)
-    upper[dts] <- diff(range(T))
-    fit <- try(optim(p.m0, getL.nls, T=T, X=X, Y=Y, hessian=hessian, FUN = FUN, method="L-BFGS-B", lower = lower, upper = upper))
+ 
+  fit <- try(optim(p.m0, getL.nls, T=T, X=X, Y=Y, hessian=hessian, FUN = FUN))
+  if(any(fit$par[dts] < 0)){
+    names(which(fit$par[dts] < 0))
+    p.m02 <- p.m0      
+    p.m02 <- p.m0[c(xs, ys, ts, dts[fit$par[dts] > 0])]
+    fit <- try(optim(p.m02, getL.nls, T=T, X=X, Y=Y, hessian=hessian, FUN = FUN))
   }
+   
   fit
 }

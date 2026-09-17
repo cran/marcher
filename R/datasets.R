@@ -24,7 +24,7 @@
 #' 
 #' @keywords data
 #' @references 
-#' For more details, see: \url{Eurodeer.org}
+#' For more details, see: \url{https://euromammals.org/eurodeer/}
 #'
 "Michela"
 

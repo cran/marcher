@@ -17,7 +17,7 @@ getCov(t1, t2, model, p)
 \item{p}{vector of the auto-correlation parameters i.e. p = c(tau.z, tau.v)}
 }
 \description{
-functions which provide the theoretical covariance [getCov()] and area [getArea()] for specific models and parameter values
+functions which provide the theoretical covariance \code{\link[=getCov]{getCov()}} and area \code{\link[=getArea]{getArea()}} for specific models and parameter values
 }
 \details{
 \code{getCov(t1, t2, model, p)} calculates the covariance matrix for different models. \code{mvrnorm2} is a slightly more efficient multivariate normal function.

@@ -2,14 +2,14 @@
 #' 
 #' Estimate likelihoods and AIC for several possible migration models. 
 #' 
-#' @param p initial parameters: [tau.z, tau.v, t1, t2, x1, x2, y1, y2]
+#' @param p initial parameters: `tau.z, tau.v, t1, t2, x1, x2, y1, y2`
 #' @param T,X,Y time,x and y coordinates
 #' @param model "wn", "ou", "ouf", "mou" or "mouf",  - whether or not to estimate tau.v
 #' @aliases getLikelihood.res getAIC.nls
 #' @export
 getLikelihood <- function(p, T, X, Y, model = c('mouf', 'mou', 'mwn', 'ouf', 'ou', 'wn')[1])
 {
-  # parameters of MOUF are: [log(tau.z), k.tau, t1, dt, x1, x2, y1, y2]
+  # parameters of MOUF are: log(tau.z), k.tau, t1, dt, x1, x2, y1, y2
   
   if(model %in% c("mouf", "ouf"))
     p.s <- c(tau.z = as.numeric(exp(p['logtau.z'])), 

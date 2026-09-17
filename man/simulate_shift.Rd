@@ -11,7 +11,9 @@ simulate_shift(T, tau = NULL, mu, A)
 
 \item{tau}{variance parameters - named vector with 'tau.z' and 'tau.v'}
 
-\item{mu}{mean vector - typically output of \code{\link{getMu}}. Can also be any complex or a two-column matrix, or a multi-column matrix with some named columns "x" and "y" (case-insensitive)).}
+\item{mu}{mean vector - typically output of \code{\link{getMu}}. Can also be
+any complex or a two-column matrix, or a multi-column matrix with some named
+columns \code{x} and \code{y} (case-insensitive).}
 
 \item{A}{95\% area parameter}
 }
